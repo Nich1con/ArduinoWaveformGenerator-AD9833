@@ -11,26 +11,26 @@
 #define ENC_DT 3
 #define ENC_CK 2
 
-#define FPS 60          // Частота обновления экрана
-#define EE_DATA_ADDR 5  // Адрес настроек в EEPROM
-#define BAT_CHECK_PERIOD 1000
-#define INTERNAL_REF_MV 1100
-#define FULL_BAT_MV   4200
-#define EMPTY_BAT_MV  3100
+#define FPS 60                // Частота обновления экрана
+#define EE_DATA_ADDR 5        // Адрес настроек в EEPROM
+#define BAT_CHECK_PERIOD 1000 // Период опроса аккумулятора
+#define INTERNAL_REF_MV 1100  // напряжение внутрненнего опорного в мВ
+#define FULL_BAT_MV   4200	  // Напряжение заряженной акб в мВ	
+#define EMPTY_BAT_MV  31000	  // Напряжение разряженной акб в мВ	
 
-#include <EEPROM.h>
+#include <EEPROM.h>           // Библиотеки
 #include <GyverOLED.h>
 #include <GyverButton.h>
 #include <GyverEncoder.h>
 #include <AD9833.h>
 
-AD9833 generator(10);
-GButton up(BTN_UP);
+AD9833 generator(10);		  // Обьекты классов
+GButton up(BTN_UP); 
 GButton down(BTN_DOWN);
 GyverOLED oled;
 Encoder enc (ENC_CK, ENC_DT, ENC_SW, TYPE2);
 
-struct {
+struct {					 // переменные, которые планируем сохранять храним в структуре
   float freq0 = 1000.0f;
   float freq1 = 1000.0f;
   int8_t freq0_dim = 0;
@@ -39,95 +39,95 @@ struct {
   bool eeprom_used = false;
 } data;
 
-int8_t output_mode = 0;
+int8_t output_mode = 0;		// Остальные просто глобальные
 int8_t display_pointer = 1;
 uint32_t message_timepoint = 0;
 uint8_t message = 0;
 uint8_t bat_charge = 5;
 
 void setup() {
-  oled.init(OLED128x64, 500);
-  EEPROM.get(EE_DATA_ADDR, data);
-  enc.tick();
-  if (enc.isHold() or !data.eeprom_used) {
-    resetSettings();
+  oled.init(OLED128x64, 500);		// Инит дисплея
+  EEPROM.get(EE_DATA_ADDR, data);	// Чтенеи настроек
+  enc.tick();                       // опрос энкодера
+  if (enc.isHold() or !data.eeprom_used) {  // Если при запуске нажат энк или настроки не были записаны
+    resetSettings();					    // Очистка настроек
   }
-  ad9833Setup();
-  adcSetup();
-  batteryCheck();
-  attachInterrupt(0, tickEnc, CHANGE);
+  ad9833Setup();		// Инициализация генератора
+  adcSetup();			// И АЦП для чтения акб
+  batteryCheck();		// Сразу проверим АКБ
+  attachInterrupt(0, tickEnc, CHANGE); // Подключение внешних прерываний для опрос энка
   attachInterrupt(1, tickEnc, CHANGE);
 }
 
-void loop() {
-  buttonsCheck();
-  encoderCheck();
-  ad9833ModeUpdate();
+void loop() {  
+  buttonsCheck();     // Опрос кнопок
+  encoderCheck();     // опрос энкодера
+  ad9833ModeUpdate(); // Обновленеи настроек генератора (если поменялись)
 
-  static uint32_t batTimer = millis();
-  if (millis() - batTimer >= BAT_CHECK_PERIOD) {
+  static uint32_t batTimer = millis();				// Таймер акб
+  if (millis() - batTimer >= BAT_CHECK_PERIOD) {   
     batTimer = millis();
-    batteryCheck();
+    batteryCheck();  // проверка акб
   }
 
-  static uint32_t oledTimer = millis();
+  static uint32_t oledTimer = millis();			// Таймер дисплея
   if (millis() - oledTimer >= 1000 / FPS) {
     oledTimer = millis();
-    printMenu();
+    printMenu();      // Отрисовка меню
   }
 }
 
 void batteryCheck() {
-  int16_t data = 0;
-  for (uint8_t i = 0; i < 4; i++) {
+  int16_t data = 0;						// буфер
+  for (uint8_t i = 0; i < 4; i++) {		// 4 измерения напряжения
     ADCSRA |= 1 << ADSC;
     while (ADCSRA & (1 << ADSC));
     data += ADC;
   }
-  data >>= 2;
-  data = (uint32_t)((INTERNAL_REF_MV * 1024UL) / data);
-  if (data < EMPTY_BAT_MV - 50) {
-    oled.clear();
+  data >>= 2;							// Усреднение
+  data = (uint32_t)((INTERNAL_REF_MV * 1024UL) / data); // Перевод в мВ
+  if (data < EMPTY_BAT_MV - 50) {		// Если акб полностью села
+    oled.clear();						// Вывод на дисплей предупрежения
     oled.print
     (F(
        "\n\n\n"
        "     BATTERY LOW\n"
        "      SHUTDOWN"
      ));
-    oled.update();
+    oled.update();	
     delay(1000);
-    oled.setPower(false);
-    SMCR = 1 << SM1 | 1 << SE;
-    asm volatile
+    oled.setPower(false);				// Выкл дисплей
+    SMCR = 1 << SM1 | 1 << SE;			// Сон - powerdown
+    asm volatile						// бесконечный сон (разбудит только резет)
     (
       "CLI    \n\t"
       "SLEEP  \n\t"
     );
   }
-  bat_charge = constrain(map(data, EMPTY_BAT_MV, FULL_BAT_MV, 1, 13), 1, 13);
+  bat_charge = constrain(map(data, EMPTY_BAT_MV, FULL_BAT_MV, 1, 13), 1, 13); // Шкала АКБ
 }
 
 
-void adcSetup() {
-  ADMUX = 1 << REFS0 | 1 << MUX3 | 1 << MUX2 | 1 << MUX1;
-  ADCSRA = 1 << ADEN | 1 << ADPS2 | 1 << ADPS1 | 1 << ADPS0;
-  delayMicroseconds(100);
+void adcSetup() {		 		// Инит ацп
+  ADMUX = 1 << REFS0 | 1 << MUX3 | 1 << MUX2 | 1 << MUX1;    // Вход ацп к опорному
+  ADCSRA = 1 << ADEN | 1 << ADPS2 | 1 << ADPS1 | 1 << ADPS0; // макс делитель и вкл ацп
+  delayMicroseconds(100);		// Небольшая задержка перед стартом
 }
 
-void resetSettings(void) {
-  data.freq0 = 1000.0f;
+void resetSettings(void) {		
+  data.freq0 = 1000.0f;     // Дефолт настройки
   data.freq1 = 1000.0f;
   data.freq0_dim = 0;
   data.freq1_dim = 0;
   data.waveform = 0;
-  data.eeprom_used = true;
-  EEPROM.put(EE_DATA_ADDR, data);
-  message_timepoint = millis();
-  message = 2;
+  data.eeprom_used = true;	
+  EEPROM.put(EE_DATA_ADDR, data);	// Записать их
+  message_timepoint = millis();		// Таймер для вывода сообщения
+  message = 2;						// тип сообщения 
 }
 
-void ad9833Setup(void) {
-  generator.begin();
+void ad9833Setup(void) {            
+  generator.begin();// инит и загрузка стандарт параметров
   generator.writeFrequency(FREQ0, data.freq0);
   generator.writeFrequency(FREQ1, data.freq1);
   switch (data.waveform) {
@@ -138,7 +138,7 @@ void ad9833Setup(void) {
 }
 
 
-void ad9833ModeUpdate(void) {
+void ad9833ModeUpdate(void) {			// Если нажатия на кнопки поменяли часть параметров - загружаем их в генератор
   static int8_t _old_output = 0;
   static int8_t _old_waveform = 0;
   if (_old_output != output_mode) {
@@ -168,17 +168,17 @@ void ad9833ModeUpdate(void) {
 }
 
 
-void tickEnc(void) {
+void tickEnc(void) {  // опрос энка в прерывании
   enc.tick();
 }
 
-
-void buttonsCheck(void) {
+ 
+void buttonsCheck(void) {  // опрос кнопок
   up.tick();
   down.tick();
 
   if (up.isClick()) {
-    display_pointer = constrain(display_pointer - 2, 1, 7);
+    display_pointer = constrain(display_pointer - 2, 1, 7); // указатель меню
   }
   if (down.isClick()) {
     display_pointer = constrain(display_pointer + 2, 1, 7);
@@ -189,13 +189,13 @@ void buttonsCheck(void) {
 void encoderCheck(void) {
   enc.tick();
 
-  if (enc.isHolded()) {
+  if (enc.isHolded()) {               // сохранение настроек по длительнмоу нажатию
     EEPROM.put(EE_DATA_ADDR, data);
     message_timepoint = millis();
     message = 1;
   }
 
-  if (enc.isDouble()) {
+  if (enc.isDouble()) {				// переключенеи размерности по дабл клику
     switch (display_pointer) {
       case 5: if (++data.freq0_dim > 2) data.freq0_dim = 0; break;
       case 7: if (++data.freq1_dim > 2) data.freq1_dim = 0; break;
@@ -204,7 +204,7 @@ void encoderCheck(void) {
 
   if (enc.isTurn()) {
 
-    if (enc.isRight()) {
+    if (enc.isRight()) {			// Дальше обработка вращений
       switch (display_pointer) {
         case 1: if (++output_mode > 2) output_mode = 0; break;
         case 3: if (++data.waveform > 2) data.waveform = 0; break;
@@ -260,7 +260,7 @@ void encoderCheck(void) {
   }
 }
 
-void trimFreq0(float dim0, float dim1, float dim2) {
+void trimFreq0(float dim0, float dim1, float dim2) {  // корректировка частоты в трех разных размерностях
   switch (data.freq0_dim) {
     case 0: data.freq0 = constrain(data.freq0 + dim0, 0.0f, 12500000.0f); break;
     case 1: data.freq0 = constrain(data.freq0 + dim1, 0.0f, 12500000.0f); break;
@@ -278,20 +278,20 @@ void trimFreq1(float dim0, float dim1, float dim2) {
   generator.writeFrequency(FREQ1, data.freq1);
 }
 
-void printMenu(void) {
+void printMenu(void) {			// Построчное меню
   oled.clear();
 
-  oled.setCursor(0, display_pointer);
+  oled.setCursor(0, display_pointer);  // указатель меню
   oled.print(F(">"));
 
-  oled.rect(114, 0, 126, 6);
+  oled.rect(114, 0, 126, 6);			// индикатор акб
   oled.line(112, 1, 112, 6);
   for (int8_t i = 0; i < bat_charge; i++) {
     oled.line(126 - i, 0, 126 - i, 7);
   }
 
   oled.home();
-  if (millis() - message_timepoint < 3000 and message) {
+  if (millis() - message_timepoint < 3000 and message) {  // вывод сообщений левый верхн угол
     switch (message) {
       case 1: oled.print(F("(SAVED)")); break;
       case 2: oled.print(F("(ERASED)")); break;
@@ -300,14 +300,14 @@ void printMenu(void) {
     message = 0;
   }
 
-  oled.print
+  oled.print			// Вывод пунктов
   (F(
      "\n OUT  : \n"
      "\n FORM : \n"
      "\n FREQ0: \n"
      "\n FREQ1: \n"
    ));
-  oled.setCursor(7, 1);
+  oled.setCursor(7, 1);		// Контент пунктов
   switch (output_mode) {
     case 0: oled.print(F("DISABLE")); break;
     case 1: oled.print(F("FROM FREQ0")); break;
@@ -331,8 +331,8 @@ void printMenu(void) {
     case 1: oled.print(data.freq1 / 1000.0f, 1); oled.print(F(" kHz")); break;
     case 2: oled.print(data.freq1 / 1000000.0f, 2); oled.print(F(" MHz")); break;
   }
-  oled.line(0, 19, 127, 19);
+  oled.line(0, 19, 127, 19);	// Линии разделители
   oled.line(0, 35, 127, 35);
   oled.line(0, 51, 127, 51);
-  oled.update();
+  oled.update();				// Апдейт дисплея
 }
