@@ -1,0 +1,38 @@
+  
+#######################################
+# Syntax Coloring Map For GyverBME280
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+AD9833	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+begin	KEYWORD2
+writeFrequency	KEYWORD2
+selectFrequency	KEYWORD2
+writePhaseRad	KEYWORD2
+writePhaseDeg	KEYWORD2
+selectPhase	KEYWORD2
+setWaveform	KEYWORD2
+outputEnable	KEYWORD2
+sleep	KEYWORD2
+generate	KEYWORD2
+#######################################
+# Constants (LITERAL1)
+#######################################
+WAVEFORM_SINE	LITERAL1
+WAVEFORM_TRIANGLE	LITERAL1
+WAVEFORM_SQUARE	LITERAL1
+WAVEFORM_SQUARE_DIV2	LITERAL1
+NO_POWERDOWN	LITERAL1
+DAC_POWERDOWN	LITERAL1
+CLOCK_POWERDOWN	LITERAL1
+FULL_POWERDOWN	LITERAL1
+FREQ0	LITERAL1
+FREQ1	LITERAL1
+PHASE0	LITERAL1
+PHASE1	LITERAL1

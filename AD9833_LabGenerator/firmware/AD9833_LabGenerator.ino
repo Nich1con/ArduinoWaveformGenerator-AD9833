@@ -1,6 +1,6 @@
 /*
   Скетч к проекту портативного генератора сигналов на AD9833
-  Для калибровки внутреннего
+  Проект на EasyEda https://oshwlab.com/Nich1con/generator
 */
 
 #define OLED_SOFT_BUFFER_64
