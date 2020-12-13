@@ -16,7 +16,7 @@
 #define BAT_CHECK_PERIOD 1000 // Период опроса аккумулятора
 #define INTERNAL_REF_MV 1100  // напряжение внутрненнего опорного в мВ
 #define FULL_BAT_MV   4200	  // Напряжение заряженной акб в мВ	
-#define EMPTY_BAT_MV  31000	  // Напряжение разряженной акб в мВ	
+#define EMPTY_BAT_MV  3100    // Напряжение разряженной акб в мВ	
 
 #include <EEPROM.h>           // Библиотеки
 #include <GyverOLED.h>
